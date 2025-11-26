@@ -1,22 +1,30 @@
 import os
-from telegram.ext import Application, CommandHandler
+import django
 from dotenv import load_dotenv
+
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'meetup.settings')
+django.setup()
+
+print("Django настроен")
+
+from telegram.ext import Application, CommandHandler
 from ptb.handlers.conversation_handlers import conversation_handler
 
 load_dotenv()
 
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 
-# async def start(update, context):
-#    await update.message.reply_text('Приветствую тебя пользователь!')
+if not TOKEN:
+    print("Токен не найден! Проверьте .env файл")
+    exit()
 
 
 def main():
     application = Application.builder().token(TOKEN).build()
-#    application.add_handler(CommandHandler("start", start))
-
     application.add_handler(conversation_handler)
     print("Бот запущен и слушает сообщения...")
+    print("Отправьте /start в Telegram")
     application.run_polling()
 
 
