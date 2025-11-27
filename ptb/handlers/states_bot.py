@@ -1,4 +1,6 @@
 # Состояния
 (
     MAIN_MENU,
-) = range(1)
+    EVENTS_LIST,      # список мероприятий
+    EVENT_PROGRAM,    # программа мероприятия
+) = range(3)

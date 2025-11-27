@@ -1,8 +1,13 @@
 # Основные обработчики
 from . import states_bot
 from ptb.keyboards import keyboard
+from ptb.keyboards.program_keyboard import events_list_keyboard, event_program_keyboard
+from ptb.events_data import get_today_events, get_event_program
 from ptb.roles import get_user_role
 from asgiref.sync import sync_to_async
+from datetime import datetime
+
+from ptb.menu_utils import get_main_menu_message
 
 
 def get_role_keyboard(role):
@@ -30,13 +35,21 @@ async def main_menu_handler(update, context):
     user = query.from_user
     role = get_user_role(user.id)
     
-    # Общие обработчики для всех ролей
+    # Обработка программы мероприятий
     if callback_data == 'program':
+        events = get_today_events()
+        
+        # Формируем подробное сообщение со списком мероприятий
+        message_text = format_events_list_message(events)
+        
         await query.edit_message_text(
-            "Программы мероприятий\n\nЗдесь будет список всех мероприятий...",
-            reply_markup=get_role_keyboard(role)
+            message_text,
+            reply_markup=events_list_keyboard(events),
+            parse_mode='Markdown'
         )
+        return states_bot.EVENTS_LIST
     
+    # Обработка предстоящих мероприятий
     elif callback_data == 'upcoming':
         await query.edit_message_text(
             "Предстоящие мероприятия\n\nЗдесь будет список предстоящих мероприятий...",
@@ -57,15 +70,6 @@ async def main_menu_handler(update, context):
     elif callback_data == 'broadcast':
         if role == "organizer":
             await query.edit_message_text(
-                "Программы мероприятий",
-                reply_markup=keyboard.organizer_keyboard()
-            )
-        else:
-            await query.answer("Эта функция доступна только организаторам!", show_alert=True)
-    
-    elif callback_data == 'broadcast':
-        if role == "organizer":
-            await query.edit_message_text(
                 "Рассылка сообщений\n\nЗдесь будет интерфейс рассылки...",
                 reply_markup=keyboard.organizer_keyboard()
             )
@@ -73,4 +77,115 @@ async def main_menu_handler(update, context):
             await query.answer("Эта функция доступна только организаторам!", show_alert=True)
 
     return states_bot.MAIN_MENU
+
+
+async def events_list_handler(update, context):
+    """
+    Обработчик для списка мероприятий
+    """
+    query = update.callback_query
+    await query.answer()
+    
+    callback_data = query.data
+    
+    # Обработка выбора конкретного мероприятия
+    if callback_data.startswith('event_'):
+        event_id = int(callback_data.split('_')[1])
+        events = get_today_events()
+        event = next((e for e in events if e['id'] == event_id), None)
+        
+        if event:
+            # Получаем программу мероприятия
+            program = get_event_program(event_id)
+            
+            # Формируем сообщение с программой
+            message_text = format_event_program_message(event, program)
+            
+            await query.edit_message_text(
+                message_text,
+                reply_markup=event_program_keyboard(event_id),
+                parse_mode='Markdown',
+                disable_web_page_preview=True
+            )
+            return states_bot.EVENT_PROGRAM
+        
+    # Обработка кнопки "Назад" в главное меню
+    elif callback_data == 'back_to_main':
+        # Используем функцию из утилит
+        message_text, reply_markup = await get_main_menu_message(
+            query.from_user.id, 
+            query.from_user.first_name
+        )
+        await query.edit_message_text(
+            message_text,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+        return states_bot.MAIN_MENU
+    
+    # Обработка кнопки "Назад" к списку мероприятий
+    elif callback_data == 'back_to_events':
+        events = get_today_events()
+        
+        message_text = format_events_list_message(events)
+        
+        await query.edit_message_text(
+            message_text,
+            reply_markup=events_list_keyboard(events),
+            parse_mode='Markdown'
+        )
+        return states_bot.EVENTS_LIST
+    
+    return states_bot.EVENTS_LIST
+
+
+def format_events_list_message(events):
+    """
+    Форматирует сообщение со списком мероприятий
+    """
+    if not events:
+        return "На сегодня мероприятий нет."
+    
+    message = "*Мероприятия на сегодня:*\n\n"
+    
+    for event in events:
+        # Форматируем время
+        time_str = f"{event['started_at'].strftime('%H:%M')} - {event['ended_at'].strftime('%H:%M')}"
+        
+        # Добавляем статус "Идет сейчас"
+        status = " 🟢 *ИДЕТ СЕЙЧАС*" if event['is_active'] else ""
+        
+        message += f"• *{event['name']}*\n"
+        message += f"  🕐 {time_str}{status}\n\n"
+        
+    message += "Выберите мероприятие, чтобы увидеть подробную программу.\n\n"
+    
+    return message
+
+
+def format_event_program_message(event, program):
+    """
+    Форматирует сообщение с программой мероприятия
+    """
+    # Заголовок мероприятия
+    date_str = event['event_date'].strftime('%d.%m.%y')
+    time_str = f"{event['started_at'].strftime('%H:%M')} - {event['ended_at'].strftime('%H:%M')}"
+    
+    message = f"*{event['name']}*\n"
+    message += f"{date_str} • {time_str}\n\n"
+    
+    # Программа
+    if program:
+        message += "*Программа:*\n\n"
+        for session in program:
+            status = " 🟢 *ИДЕТ СЕЙЧАС*" if session['is_active'] else ""
+            speaker_link = f"[{session['speaker']}](https://t.me/{session['speaker_username'][1:]})" if session['speaker_username'] else session['speaker']
+            
+            message += f"{session['topic']}\n"
+            message += f"{session['started_at']} - {session['ended_at']} {status}\n"
+            message += f"{speaker_link}\n\n"
+    else:
+        message += "Программа мероприятия пока не доступна.\n"
+    
+    return message
 
