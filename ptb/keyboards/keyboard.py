@@ -2,22 +2,43 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
-test_menu = InlineKeyboardMarkup([
-    [InlineKeyboardButton('тест', callback_data='test')]
-])
-
 def guest_keyboard():
     """
-    Основная клавиатура для гостя (слушателя)
-    Содержит основные функции доступные гостю:
-    - Просмотр программы мероприятий
-    - Просмотр предстоящих мероприятий
-    - Просмотр своего профиля
+    Клавиатура для гостя (слушателя)
     """
     keyboard = [
         [
-            InlineKeyboardButton('Программа мероприятий', callback_data='program'),
+            InlineKeyboardButton('Программы мероприятий', callback_data='program'),
             InlineKeyboardButton('Предстоящие мероприятия', callback_data='upcoming')
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def speaker_keyboard():
+    """
+    Клавиатура для спикера
+    """
+    keyboard = [
+        [
+            InlineKeyboardButton('Завершить свое выступление', callback_data='finish_speech'),
+        ],
+        [
+            InlineKeyboardButton('Программы мероприятий', callback_data='program'),
+            InlineKeyboardButton('Предстоящие мероприятия', callback_data='upcoming')
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def organizer_keyboard():
+    """
+    Клавиатура для организатора
+    """
+    keyboard = [
+        [
+            InlineKeyboardButton('Программы мероприятий', callback_data='program'),
+            InlineKeyboardButton('Рассылка', callback_data='broadcast')
         ]
     ]
     return InlineKeyboardMarkup(keyboard)

@@ -1,4 +1,4 @@
 # Состояния
 (
-    TEST,
+    MAIN_MENU,
 ) = range(1)

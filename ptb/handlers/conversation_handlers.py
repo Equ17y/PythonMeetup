@@ -5,15 +5,16 @@ from telegram.ext import(
     ConversationHandler,
 )
 from . import cmd_handlers, states_bot
-
-from .callback_handlers import guest_handler_main_menu
+from .callback_handlers import main_menu_handler
 
 conversation_handler = ConversationHandler(
-    entry_points=[CommandHandler('start', cmd_handlers.guest_start)],
+    entry_points=[
+        CommandHandler('start', cmd_handlers.start)
+    ],
     states={
-        states_bot.TEST: [
-            CallbackQueryHandler(guest_handler_main_menu),
+        states_bot.MAIN_MENU: [
+            CallbackQueryHandler(main_menu_handler),
         ],
     },
-    fallbacks=[CommandHandler('start', cmd_handlers.guest_start)]
+    fallbacks=[CommandHandler('start', cmd_handlers.start)]
 )

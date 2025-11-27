@@ -1,41 +1,36 @@
 # Обработчик команд вида /команда
 from ptb.keyboards import keyboard
+from ptb.roles import get_user_role
+from ptb.greeting_messages import get_welcome_message
 from . import states_bot
 from asgiref.sync import sync_to_async
 
-async def guest_start(update, context):
-    """
-    Обработчик команды /start для гостя
-    Регистрирует нового пользователя как гостя или найдет
-    зарегистрированного
-    """
 
-    from meetup_core.models.Guest import Guest
-
+async def start(update, context):
+    """
+    Обработчик команды /start для всех ролей
+    """
     user = update.effective_user
+    
+    # Определяем роль пользователя
+    role = get_user_role(user.id)
 
-    # Создание либо нахождения в базе данных записи гостя
-    guest, created = await sync_to_async(Guest.objects.get_or_create)(
-        telegram_id=user.id,
-        defaults={
-            'first_name': user.first_name,
-            'last_name': user.last_name,
-        }
-    )
-
-    if created:
-        message = f'''Добро пожаловать, {user.first_name}!
-Вы успешно зарегистрированы как слушатель.
-
-Используете кнопки ниже для навигации:'''
-    else:
-        message = f'''C возвращением, {guest.first_name}!
-
-Используете кнопки ниже для навигации:'''
+    # Получаем соответствующее приветственное сообщение
+    welcome_message = get_welcome_message(role, user.first_name)
+    
+    # Получаем соответствующую клавиатуру
+    if role == "speaker":
+        reply_markup = keyboard.speaker_keyboard()
+    elif role == "organizer":
+        reply_markup = keyboard.organizer_keyboard()
+    else:  # guest
+        reply_markup = keyboard.guest_keyboard()
 
     await update.message.reply_text(
-        text=message,
-        reply_markup=keyboard.guest_keyboard(),
+        text=welcome_message,
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
     )
 
-    return states_bot.TEST
+    return states_bot.MAIN_MENU
+
