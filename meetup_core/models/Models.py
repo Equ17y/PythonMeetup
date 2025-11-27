@@ -52,7 +52,7 @@ class SpeakerTopic(models.Model):
         User,
         on_delete=models.CASCADE,
         verbose_name='Спикер',
-        limit_choices_to={'user_type': 'speaker'},
+        limit_choices_to={'user_role': 'speaker'},
     )
     topic_date = models.DateField('День выступления')
     started_at = models.TimeField('Время начала выступления')
