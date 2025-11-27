@@ -1,5 +1,5 @@
 # Клавиатуры
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 
 def guest_keyboard():
@@ -42,3 +42,13 @@ def organizer_keyboard():
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
+
+
+def broadcast_confirmation_keyboard():
+    """
+    Клавиатура подтверждения рассылки (Reply клавиатура)
+    """
+    keyboard = [
+        ["Разослать", "Отменить"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
