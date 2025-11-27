@@ -6,6 +6,7 @@ from ptb.events_data import get_today_events, get_event_program
 from ptb.roles import get_user_role
 from asgiref.sync import sync_to_async
 from datetime import datetime
+from .broadcast_handlers import start_broadcast, receive_broadcast_text, confirm_broadcast
 
 from ptb.menu_utils import get_main_menu_message
 
@@ -67,12 +68,24 @@ async def main_menu_handler(update, context):
             await query.answer("Эта функция доступна только спикерам!", show_alert=True)
             
     # Обработчики для организатора
-    elif callback_data == 'broadcast':
+    elif callback_data == 'event_programs':
         if role == "organizer":
+            events = get_today_events()
+            message_text = format_events_list_message(events)
+
             await query.edit_message_text(
-                "Рассылка сообщений\n\nЗдесь будет интерфейс рассылки...",
-                reply_markup=keyboard.organizer_keyboard()
+                message_text,
+                reply_markup=events_list_keyboard(events),
+                parse_mode='Markdown'
             )
+            return states_bot.EVENTS_LIST
+        else:
+            await query.answer("Эта функция доступна только организаторам!",
+                               show_alert=True)
+
+    elif callback_data == 'broadcast':  # Второй обработчик - для рассылки
+        if role == "organizer":
+            return await start_broadcast(update, context)
         else:
             await query.answer("Эта функция доступна только организаторам!", show_alert=True)
 
