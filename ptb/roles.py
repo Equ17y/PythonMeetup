@@ -1,8 +1,9 @@
 TEST_ROLES = {
-    106118627: "organizer",  # user_id: организатор
+    975432272: "organizer",  # user_id: организатор
     000000000: "speaker",    # user_id: спикер
     # все остальные слушатели
     # 106118627 - мой id
+    # 975432272 - Соболь id
 }
 
 def get_user_role(user_id):
