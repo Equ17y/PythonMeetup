@@ -14,16 +14,10 @@ async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    await query.edit_message_text(
-        "Массовая рассылка \n\nВведите текст для рассылки:",
-        parse_mode='Markdown',
-        reply_markup=None
-    )
-
     # Сообщение с инструкцией
     await context.bot.send_message(
         chat_id=query.message.chat_id,
-        text="Введите текст рассылки:",
+        text="Массовая рассылка \n\nВведите текст для рассылки:",
         reply_markup=ReplyKeyboardRemove()
     )
 
