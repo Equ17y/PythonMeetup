@@ -2,13 +2,37 @@
 from . import states_bot
 from ptb.keyboards import keyboard
 from ptb.keyboards.program_keyboard import events_list_keyboard, event_program_keyboard
-from ptb.events_data import get_today_events, get_event_program
+from ptb.events_data import get_today_events, get_event_program, finish_current_talk_for_speaker
 from ptb.roles import get_user_role
 from asgiref.sync import sync_to_async
 from datetime import datetime
 from .broadcast_handlers import start_broadcast, receive_broadcast_text, confirm_broadcast
 
 from ptb.menu_utils import get_main_menu_message
+
+
+async def safe_edit_message(query, new_text, reply_markup=None, parse_mode=None):
+    """
+    Безопасная замена текста сообщения:
+    - обновляет только если текст реально изменился
+    - предотвращает ошибку "Message is not modified"
+    """
+    current_text = query.message.text_html or query.message.text
+
+    if current_text == new_text:
+        # Сообщение такое же — просто заменяем клавиатуру, если она отличается
+        try:
+            await query.edit_message_reply_markup(reply_markup=reply_markup)
+        except Exception:
+            pass
+        return
+
+    # Если текст другой — спокойно обновляем
+    await query.edit_message_text(
+        new_text,
+        reply_markup=reply_markup,
+        parse_mode=parse_mode
+    )
 
 
 def get_role_keyboard(role):
@@ -43,7 +67,8 @@ async def main_menu_handler(update, context):
         # Формируем подробное сообщение со списком мероприятий
         message_text = format_events_list_message(events)
         
-        await query.edit_message_text(
+        await safe_edit_message(
+            query,
             message_text,
             reply_markup=events_list_keyboard(events),
             parse_mode='Markdown'
@@ -52,7 +77,8 @@ async def main_menu_handler(update, context):
     
     # Обработка предстоящих мероприятий
     elif callback_data == 'upcoming':
-        await query.edit_message_text(
+        await safe_edit_message(
+            query,
             "Предстоящие мероприятия\n\nЗдесь будет список предстоящих мероприятий...",
             reply_markup=get_role_keyboard(role)
         )
@@ -60,10 +86,37 @@ async def main_menu_handler(update, context):
     # Обработчики для спикера
     elif callback_data == 'finish_speech':
         if role == "speaker":
-            await query.edit_message_text(
-                "Ваше выступление завершено! Спасибо за участие!",
-                reply_markup=keyboard.speaker_keyboard()
-            )
+            user = query.from_user
+            username = user.username
+
+            if not username:
+                await query.answer(
+                    "У вашего Telegram-профиля не задан username",
+                    show_alert=True
+                )
+                return states_bot.MAIN_MENU
+
+            event, session = finish_current_talk_for_speaker(username)
+
+            if event and session:
+                text = (
+                    f"Вы завершили свое выступление!\n\n"
+                    f"Мероприятие: *{event['name']}*\n"
+                    f"Доклад: *{session['topic']}*\n\n"
+                    f"Спасибо за участие!"
+                )
+                await safe_edit_message(
+                    query,
+                    text,
+                    reply_markup=keyboard.speaker_keyboard(),
+                    parse_mode='Markdown'
+                )
+            else:
+                await query.answer(
+                    "Сейчас нет активного доклада, привязанного к вашему аккаунту.\n"
+                    "Возможно, ваш доклад ещё не начался или уже завершён.",
+                    show_alert=True
+                )
         else:
             await query.answer("Эта функция доступна только спикерам!", show_alert=True)
             
@@ -114,11 +167,11 @@ async def events_list_handler(update, context):
             # Формируем сообщение с программой
             message_text = format_event_program_message(event, program)
             
-            await query.edit_message_text(
+            await safe_edit_message(
+                query,
                 message_text,
                 reply_markup=event_program_keyboard(event_id),
-                parse_mode='Markdown',
-                disable_web_page_preview=True
+                parse_mode='Markdown'
             )
             return states_bot.EVENT_PROGRAM
         
@@ -129,7 +182,8 @@ async def events_list_handler(update, context):
             query.from_user.id, 
             query.from_user.first_name
         )
-        await query.edit_message_text(
+        await safe_edit_message(
+            query,
             message_text,
             reply_markup=reply_markup,
             parse_mode='Markdown'
@@ -142,7 +196,8 @@ async def events_list_handler(update, context):
         
         message_text = format_events_list_message(events)
         
-        await query.edit_message_text(
+        await safe_edit_message(
+            query,
             message_text,
             reply_markup=events_list_keyboard(events),
             parse_mode='Markdown'
@@ -192,11 +247,15 @@ def format_event_program_message(event, program):
         message += "*Программа:*\n\n"
         for session in program:
             status = " 🟢 *ИДЕТ СЕЙЧАС*" if session['is_active'] else ""
-            speaker_link = f"[{session['speaker']}](https://t.me/{session['speaker_username'][1:]})" if session['speaker_username'] else session['speaker']
-            
+            clean_username = session['speaker_username'].lstrip("@")
+            speaker_link = (
+                    f"[{session['speaker']}](https://t.me/{session['speaker_username'][1:]})"
+                    if session['speaker_username']
+                    else session['speaker']
+                )
             message += f"{session['topic']}\n"
             message += f"{session['started_at']} - {session['ended_at']} {status}\n"
-            message += f"{speaker_link}\n\n"
+            message += f"Докладчик: {speaker_link}\n\n"
     else:
         message += "Программа мероприятия пока не доступна.\n"
     
