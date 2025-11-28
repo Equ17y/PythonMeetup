@@ -7,7 +7,7 @@ from telegram.ext import(
     filters
 )
 from . import cmd_handlers, states_bot
-from .callback_handlers import main_menu_handler, events_list_handler
+from .callback_handlers import main_menu_handler, events_list_handler, next_events_list_handler
 from .broadcast_handlers import receive_broadcast_text, confirm_broadcast
 
 conversation_handler = ConversationHandler(
@@ -23,6 +23,12 @@ conversation_handler = ConversationHandler(
         ],
         states_bot.EVENT_PROGRAM: [
             CallbackQueryHandler(events_list_handler),
+        ],
+        states_bot.NEXT_EVENTS_LIST: [
+            CallbackQueryHandler(next_events_list_handler),
+        ],
+        states_bot.NEXT_EVENT_PROGRAM: [
+            CallbackQueryHandler(next_events_list_handler),
         ],
         states_bot.BROADCAST_TEXT: [
             MessageHandler(

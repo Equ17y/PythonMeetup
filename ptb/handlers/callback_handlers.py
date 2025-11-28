@@ -2,12 +2,10 @@
 from . import states_bot
 from ptb.keyboards import keyboard
 from ptb.keyboards.program_keyboard import events_list_keyboard, event_program_keyboard
-from ptb.events_data import get_today_events, get_event_program, finish_current_talk_for_speaker
+from ptb.keyboards.next_events_keyboard import next_events_list_keyboard, next_event_program_keyboard
+from ptb.events_data import get_today_events, get_event_program, finish_current_talk_for_speaker, get_next_events, get_next_event_program
 from ptb.roles import get_user_role
-from asgiref.sync import sync_to_async
-from datetime import datetime
 from .broadcast_handlers import start_broadcast, receive_broadcast_text, confirm_broadcast
-
 from ptb.menu_utils import get_main_menu_message
 
 
@@ -77,11 +75,17 @@ async def main_menu_handler(update, context):
     
     # Обработка предстоящих мероприятий
     elif callback_data == 'upcoming':
+        next_events = get_next_events()
+        
+        message_text = format_next_events_message(next_events)
+        
         await safe_edit_message(
             query,
-            "Предстоящие мероприятия\n\nЗдесь будет список предстоящих мероприятий...",
-            reply_markup=get_role_keyboard(role)
+            message_text,
+            reply_markup=next_events_list_keyboard(next_events),
+            parse_mode='Markdown'
         )
+        return states_bot.NEXT_EVENTS_LIST
         
     # Обработчики для спикера
     elif callback_data == 'finish_speech':
@@ -207,6 +211,102 @@ async def events_list_handler(update, context):
     return states_bot.EVENTS_LIST
 
 
+async def next_events_list_handler(update, context):
+    """
+    Обработчик для списка предстоящих мероприятий
+    """
+    query = update.callback_query
+    await query.answer()
+    
+    callback_data = query.data
+    
+    # Обработка выбора конкретного мероприятия
+    if callback_data.startswith('event_'):
+        event_id = int(callback_data.split('_')[1])
+        events = get_next_events()
+        event = next((e for e in events if e['id'] == event_id), None)
+        
+        if event:
+            # Получаем программу мероприятия
+            program = get_next_event_program(event_id)
+            
+            # Формируем сообщение с программой
+            message_text = format_next_event_program_message(event, program)
+            
+            await safe_edit_message(
+                query,
+                message_text,
+                reply_markup=next_event_program_keyboard(event_id),
+                parse_mode='Markdown'
+            )
+            return states_bot.NEXT_EVENT_PROGRAM
+    
+    # Обработка подписки   
+    elif callback_data.startswith("subscribe_"):
+        event_id = int(callback_data.split("_")[1])
+        user_id = query.from_user.id
+
+        # Получаем событие и форматируем сообщение
+        events = get_next_events()
+        event = next((e for e in events if e["id"] == event_id), None)
+
+        if event:
+            event_name = event["name"]
+            event_date = event["event_date"].strftime("%d.%m.%Y")
+            event_time = f"{event['started_at'].strftime('%H:%M')} – {event['ended_at'].strftime('%H:%M')}"
+
+            text = (
+                f"🎉 *Вы подписались на мероприятие!*\n\n"
+                f"*{event_name}*\n"
+                f"📅 {event_date}\n"
+                f"⏰ {event_time}\n\n"
+                f"Вам придет напоминание за день до начала мероприятия."
+            )
+
+            # Меняем клавиатуру на "Вы подписаны"
+            await query.edit_message_text(
+                text,
+                reply_markup=next_event_program_keyboard(event_id, subscribed=True),
+                parse_mode="Markdown"
+            )
+
+        else:
+            await query.answer("Ошибка: мероприятие не найдено.", show_alert=True)
+
+        return states_bot.NEXT_EVENT_PROGRAM
+        
+    # Обработка кнопки "Назад" в главное меню
+    elif callback_data == 'back_to_main':
+        # Используем функцию из утилит
+        message_text, reply_markup = await get_main_menu_message(
+            query.from_user.id, 
+            query.from_user.first_name
+        )
+        await safe_edit_message(
+            query,
+            message_text,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+        return states_bot.MAIN_MENU
+    
+    # Обработка кнопки "Назад" к списку мероприятий
+    elif callback_data == 'back_to_events':
+        events = get_next_events()
+        
+        message_text = format_next_events_message(events)
+        
+        await safe_edit_message(
+            query,
+            message_text,
+            reply_markup=next_events_list_keyboard(events),
+            parse_mode='Markdown'
+        )
+        return states_bot.NEXT_EVENTS_LIST
+    
+    return states_bot.NEXT_EVENTS_LIST
+
+
 def format_events_list_message(events):
     """
     Форматирует сообщение со списком мероприятий
@@ -261,3 +361,47 @@ def format_event_program_message(event, program):
     
     return message
 
+
+def format_next_events_message(events):
+    """
+    Форматирует сообщение со списком следующих мероприятий
+    """
+    if not events:
+        return "Предстоящих мероприятия нет."
+    
+    message = "*Предстоящие мероприятия:*\n\n"
+    
+    for event in events:
+        # Форматируем время
+        time_str = f"{event['started_at'].strftime('%H:%M')} - {event['ended_at'].strftime('%H:%M')}"
+        
+        message += f"• *{event['name']}*\n"
+        message += f"{event['event_date']}  🕐 {time_str}\n\n"
+        
+    message += "Выберите мероприятие, чтобы увидеть подробную программу, и подписаться.\n\n"
+    
+    return message
+
+
+def format_next_event_program_message(event, program):
+    """
+    Форматирует сообщение с программой мероприятия
+    """
+    # Заголовок мероприятия
+    date_str = event['event_date'].strftime('%d.%m.%y')
+    time_str = f"{event['started_at'].strftime('%H:%M')} - {event['ended_at'].strftime('%H:%M')}"
+    
+    message = f"*{event['name']}*\n"
+    message += f"{date_str} • {time_str}\n\n"
+    
+    # Программа
+    if program:
+        message += "*Программа:*\n\n"
+        for session in program:
+            message += f"{session['topic']}\n"
+            message += f"{session['started_at']} - {session['ended_at']}\n"
+            message += f"Докладчик: {session['speaker']}\n\n"
+    else:
+        message += "Программа мероприятия пока не доступна.\n"
+    
+    return message
