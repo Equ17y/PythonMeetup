@@ -9,6 +9,8 @@ def guest_keyboard():
     keyboard = [
         [
             InlineKeyboardButton('Программы мероприятий', callback_data='program'),
+        ],
+        [
             InlineKeyboardButton('Предстоящие мероприятия', callback_data='upcoming')
         ]
     ]
@@ -25,6 +27,8 @@ def speaker_keyboard():
         ],
         [
             InlineKeyboardButton('Программы мероприятий', callback_data='program'),
+        ],
+        [
             InlineKeyboardButton('Предстоящие мероприятия', callback_data='upcoming')
         ]
     ]
@@ -38,6 +42,8 @@ def organizer_keyboard():
     keyboard = [
         [
             InlineKeyboardButton('Программы мероприятий', callback_data='program'),
+        ],
+        [
             InlineKeyboardButton('Рассылка', callback_data='broadcast')
         ]
     ]
