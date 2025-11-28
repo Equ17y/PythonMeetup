@@ -1,4 +1,3 @@
-# ptb/handlers/broadcast_handlers.py
 from telegram import Update, ReplyKeyboardRemove
 from telegram.ext import ContextTypes, MessageHandler, filters
 from . import states_bot
