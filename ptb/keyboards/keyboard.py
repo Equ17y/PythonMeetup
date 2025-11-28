@@ -41,7 +41,7 @@ def organizer_keyboard():
     """
     keyboard = [
         [
-            InlineKeyboardButton('Программы мероприятий', callback_data='program'),
+            InlineKeyboardButton('Программы мероприятий', callback_data='event_programs'),
         ],
         [
             InlineKeyboardButton('Рассылка', callback_data='broadcast')

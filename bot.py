@@ -10,6 +10,7 @@ print("Django настроен")
 
 from telegram.ext import Application
 from ptb.handlers.conversation_handlers import conversation_handler
+from ptb.services.bot_setup import setup_bot_handlers, start_background_services
 
 load_dotenv()
 
@@ -23,6 +24,8 @@ if not TOKEN:
 def main():
     application = Application.builder().token(TOKEN).build()
     application.add_handler(conversation_handler)
+    setup_bot_handlers(application)
+    start_background_services(application)
     print("Бот запущен и слушает сообщения...")
     print("Отправьте /start в Telegram")
     application.run_polling()

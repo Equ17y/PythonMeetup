@@ -7,7 +7,7 @@ from ptb.events_data import get_today_events, get_event_program, finish_current_
 from ptb.roles import get_user_role
 from .broadcast_handlers import start_broadcast, receive_broadcast_text, confirm_broadcast
 from ptb.menu_utils import get_main_menu_message
-
+from ptb.services.subscription_service import subscribe_to_event, is_user_subscribed
 
 async def safe_edit_message(query, new_text, reply_markup=None, parse_mode=None):
     """
@@ -61,7 +61,7 @@ async def main_menu_handler(update, context):
     # Обработка программы мероприятий
     if callback_data == 'program':
         events = get_today_events()
-        
+
         # Формируем подробное сообщение со списком мероприятий
         message_text = format_events_list_message(events)
         
@@ -73,7 +73,7 @@ async def main_menu_handler(update, context):
         )
         return states_bot.EVENTS_LIST
     
-    # Обработка предстоящих мероприятий
+    # Обработка предстоящих мероприятий для всех ролей
     elif callback_data == 'upcoming':
         next_events = get_next_events()
         
@@ -219,7 +219,8 @@ async def next_events_list_handler(update, context):
     await query.answer()
     
     callback_data = query.data
-    
+    user_id = query.from_user.id
+
     # Обработка выбора конкретного мероприятия
     if callback_data.startswith('event_'):
         event_id = int(callback_data.split('_')[1])
@@ -227,6 +228,9 @@ async def next_events_list_handler(update, context):
         event = next((e for e in events if e['id'] == event_id), None)
         
         if event:
+            # Проверка подписки через сервис
+            subscribed = await is_user_subscribed(user_id, event_id)
+
             # Получаем программу мероприятия
             program = get_next_event_program(event_id)
             
@@ -236,7 +240,7 @@ async def next_events_list_handler(update, context):
             await safe_edit_message(
                 query,
                 message_text,
-                reply_markup=next_event_program_keyboard(event_id),
+                reply_markup=next_event_program_keyboard(event_id, subscribed=subscribed),
                 parse_mode='Markdown'
             )
             return states_bot.NEXT_EVENT_PROGRAM
@@ -251,25 +255,31 @@ async def next_events_list_handler(update, context):
         event = next((e for e in events if e["id"] == event_id), None)
 
         if event:
-            event_name = event["name"]
-            event_date = event["event_date"].strftime("%d.%m.%Y")
-            event_time = f"{event['started_at'].strftime('%H:%M')} – {event['ended_at'].strftime('%H:%M')}"
 
-            text = (
-                f"🎉 *Вы подписались на мероприятие!*\n\n"
-                f"*{event_name}*\n"
-                f"📅 {event_date}\n"
-                f"⏰ {event_time}\n\n"
-                f"Вам придет напоминание за день до начала мероприятия."
-            )
+            success = await subscribe_to_event(user_id, event_id)
 
-            # Меняем клавиатуру на "Вы подписаны"
-            await query.edit_message_text(
-                text,
-                reply_markup=next_event_program_keyboard(event_id, subscribed=True),
-                parse_mode="Markdown"
-            )
+            if success:
+                event_name = event["name"]
+                event_date = event["event_date"].strftime("%d.%m.%Y")
+                event_time = f"{event['started_at'].strftime('%H:%M')} – {event['ended_at'].strftime('%H:%M')}"
 
+                text = (
+                    f"🎉 *Вы подписались на мероприятие!*\n\n"
+                    f"*{event_name}*\n"
+                    f"📅 {event_date}\n"
+                    f"⏰ {event_time}\n\n"
+                    f"Вам придет напоминание за день до начала мероприятия."
+                )
+
+                # Меняем клавиатуру на "Вы подписаны"
+                await query.edit_message_text(
+                    text,
+                    reply_markup=next_event_program_keyboard(event_id, subscribed=True),
+                    parse_mode="Markdown"
+                )
+
+            else:
+                await query.answer("Вы уже подписаны на это мероприятие!",show_alert=True)
         else:
             await query.answer("Ошибка: мероприятие не найдено.", show_alert=True)
 
