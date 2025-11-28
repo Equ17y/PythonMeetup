@@ -55,7 +55,7 @@ def get_today_events():
             "id": 1,
             "name": "Тема мероприятия #1",
             "event_date": today,
-            "started_at": time(10, 0),
+            "started_at": time(0, 0),
             "ended_at": time(13, 0),
         },
         {
@@ -70,7 +70,7 @@ def get_today_events():
             "name": "Тема мероприятия #3",
             "event_date": today,
             "started_at": time(16, 0),
-            "ended_at": time(19, 0),
+            "ended_at": time(23, 59),
         },
     ]
 
@@ -90,7 +90,7 @@ def _get_program_template():
     return {
         1: [
             {
-                "started_at": time(10, 0),
+                "started_at": time(0, 0),
                 "ended_at": time(11, 0),
                 "topic": "Тема доклада #1",
                 "speaker": "Иван Петров",
@@ -151,7 +151,7 @@ def _get_program_template():
             },
             {
                 "started_at": time(18, 0),
-                "ended_at": time(19, 0),
+                "ended_at": time(23, 59),
                 "topic": "Тема доклада #3",
                 "speaker": "Иван Петров",
                 "speaker_username": "@Nyuta12",
