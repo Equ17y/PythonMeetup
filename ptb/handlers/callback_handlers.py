@@ -255,19 +255,20 @@ async def next_events_list_handler(update, context):
         event = next((e for e in events if e["id"] == event_id), None)
 
         if event:
-
+            # TODO: ЗАМЕНИТЬ на subscribe_to_event_db при переходе на БД
             success = await subscribe_to_event(user_id, event_id)
 
             if success:
+
                 event_name = event["name"]
                 event_date = event["event_date"].strftime("%d.%m.%Y")
                 event_time = f"{event['started_at'].strftime('%H:%M')} – {event['ended_at'].strftime('%H:%M')}"
 
                 text = (
-                    f"🎉 *Вы подписались на мероприятие!*\n\n"
+                    f"*Вы подписались на мероприятие!*\n\n"
                     f"*{event_name}*\n"
-                    f"📅 {event_date}\n"
-                    f"⏰ {event_time}\n\n"
+                    f"{event_date}\n"
+                    f"{event_time}\n\n"
                     f"Вам придет напоминание за день до начала мероприятия."
                 )
 
