@@ -2,11 +2,17 @@ from telegram import Update, ReplyKeyboardRemove
 from telegram.ext import ContextTypes, MessageHandler, filters
 from . import states_bot
 from ptb.keyboards import keyboard
+from meetup_core.models.Models import User
+from asgiref.sync import sync_to_async
+from ptb.menu_utils import get_main_menu_message
 
-# Простые заглушки
-async def get_user_ids_by_role(role: str):
-    """Заглушка для получения ID по ролям"""
-    return [975432272]  # Замени на свой ID
+
+@sync_to_async
+def get_user_ids_by_role(role: str):
+    """Получение ID по ролям из БД"""
+    users = User.objects.filter(user_role=role)
+    return [user.tg_id for user in users]
+
 
 async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Начало процесса рассылки через callback"""
@@ -21,6 +27,7 @@ async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     return states_bot.BROADCAST_TEXT
+
 
 async def receive_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Получаем текст рассылки"""
@@ -37,18 +44,23 @@ async def receive_broadcast_text(update: Update, context: ContextTypes.DEFAULT_T
 
     return states_bot.BROADCAST_CONFIRM
 
+
 async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Подтверждение рассылки"""
-    # ИСПРАВЛЕНО: проверяем правильные тексты кнопок
     if "Отменить" in update.message.text:
         await update.message.reply_text(
             "Рассылка отменена",
             reply_markup=ReplyKeyboardRemove()
         )
         # Возвращаем клавиатуру организатора
+        message_text, reply_markup = await get_main_menu_message(
+            update.effective_user.id, update.effective_user.first_name
+        )
+
         await update.message.reply_text(
-            "Главное меню:",
-            reply_markup=keyboard.organizer_keyboard()
+            text=message_text,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
         )
         context.user_data.clear()
         return states_bot.MAIN_MENU
@@ -68,9 +80,14 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     # Возвращаем клавиатуру организатора
+    message_text, reply_markup = await get_main_menu_message(
+        update.effective_user.id, update.effective_user.first_name
+    )
+
     await update.message.reply_text(
-        "Главное меню:",
-        reply_markup=keyboard.organizer_keyboard()
+        text=message_text,
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
     )
 
     context.user_data.clear()

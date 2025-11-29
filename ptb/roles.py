@@ -1,14 +1,19 @@
-TEST_ROLES = {
-    000000000: "organizer",  # user_id: организатор
-    000000000: "speaker",    # user_id: спикер
-    # все остальные слушатели
-    # 106118627 - мой id
-    # 975432272 - Соболь id
-}
+from meetup_core.models.Models import User
 
-def get_user_role(user_id):
+
+def get_user_role(user_id: int) -> str:
     """
-    Определяет роль пользователя по user_id
-    Временная реализация - позже заменим на запрос к БД
+    Возвращает роль пользователя по ID
     """
-    return TEST_ROLES.get(user_id, "guest")
+
+    user = user = User.objects.filter(tg_id=user_id).first()
+
+    if user:
+        return user.user_role
+
+    # Если нет юзера в бд -> создаем
+    else:
+        new_user = User(tg_id=user_id, user_role='guest')
+        new_user.save()
+
+    return 'guest'
