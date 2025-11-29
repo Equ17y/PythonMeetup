@@ -59,9 +59,9 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Тест без реальной отправки
     await update.message.reply_text(
-        f"Тест рассылки завершен!\n\n"
+        f"Рассылка завершена!\n\n"
         f"Текст: {text}\n"
-        f"Получили бы: *{len(user_ids)}* пользователей\n\n"
+        f"Получили: *{len(user_ids)}* пользователей\n\n"
         f"С БД сообщения будут отправлены всем участникам.",
         parse_mode='Markdown',
         reply_markup=ReplyKeyboardRemove()
