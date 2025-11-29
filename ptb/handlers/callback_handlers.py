@@ -1,13 +1,23 @@
 # Основные обработчики
 from . import states_bot
 from ptb.keyboards import keyboard
-from ptb.keyboards.program_keyboard import events_list_keyboard, event_program_keyboard
-from ptb.keyboards.next_events_keyboard import next_events_list_keyboard, next_event_program_keyboard
-from ptb.events_data import get_today_events, get_event_program, finish_current_talk_for_speaker, get_next_events, get_next_event_program
+from ptb.keyboards.program_keyboard import (
+    events_list_keyboard, event_program_keyboard
+)
+from ptb.keyboards.next_events_keyboard import (
+    next_events_list_keyboard,
+    next_event_program_keyboard
+)
+from ptb.events_data import (
+    get_today_events, get_event_program,
+    finish_current_talk_for_speaker, get_next_events, get_next_event_program
+)
 from ptb.roles import get_user_role
 from .broadcast_handlers import start_broadcast, receive_broadcast_text, confirm_broadcast
 from ptb.menu_utils import get_main_menu_message
-from ptb.services.subscription_service import subscribe_to_event, is_user_subscribed
+from ptb.services.subscription_service import (
+    subscribe_to_event, is_user_subscribed
+)
 from asgiref.sync import sync_to_async
 
 
@@ -20,14 +30,12 @@ async def safe_edit_message(query, new_text, reply_markup=None, parse_mode=None)
     current_text = query.message.text_html or query.message.text
 
     if current_text == new_text:
-        # Сообщение такое же — просто заменяем клавиатуру, если она отличается
         try:
             await query.edit_message_reply_markup(reply_markup=reply_markup)
         except Exception:
             pass
         return
 
-    # Если текст другой — спокойно обновляем
     await query.edit_message_text(
         new_text,
         reply_markup=reply_markup,
@@ -58,13 +66,11 @@ async def main_menu_handler(update, context):
     callback_data = query.data
 
     user = query.from_user
-    role = await sync_to_async(get_user_role)(user.id)
+    role = await sync_to_async(get_user_role)(user.id, user.username)
 
-    # Обработка программы мероприятий
     if callback_data == 'program':
-        events = get_today_events()
+        events = await sync_to_async(get_today_events)()
 
-        # Формируем подробное сообщение со списком мероприятий
         message_text = format_events_list_message(events)
 
         await safe_edit_message(
@@ -75,9 +81,8 @@ async def main_menu_handler(update, context):
         )
         return states_bot.EVENTS_LIST
 
-    # Обработка предстоящих мероприятий для всех ролей
     elif callback_data == 'upcoming':
-        next_events = get_next_events()
+        next_events = await sync_to_async(get_next_events)()
 
         message_text = format_next_events_message(next_events)
 
@@ -89,7 +94,6 @@ async def main_menu_handler(update, context):
         )
         return states_bot.NEXT_EVENTS_LIST
 
-    # Обработчики для спикера
     elif callback_data == 'finish_speech':
         if role == "speaker":
             user = query.from_user
@@ -102,7 +106,7 @@ async def main_menu_handler(update, context):
                 )
                 return states_bot.MAIN_MENU
 
-            event, session = finish_current_talk_for_speaker(username)
+            event, session = await sync_to_async(finish_current_talk_for_speaker)(username)
 
             if event and session:
                 text = (
@@ -126,10 +130,9 @@ async def main_menu_handler(update, context):
         else:
             await query.answer("Эта функция доступна только спикерам!", show_alert=True)
 
-    # Обработчики для организатора
     elif callback_data == 'event_programs':
         if role == "organizer":
-            events = get_today_events()
+            events = await sync_to_async(get_today_events)()
             message_text = format_events_list_message(events)
 
             await query.edit_message_text(
@@ -142,7 +145,7 @@ async def main_menu_handler(update, context):
             await query.answer("Эта функция доступна только организаторам!",
                                show_alert=True)
 
-    elif callback_data == 'broadcast':  # Второй обработчик - для рассылки
+    elif callback_data == 'broadcast':
         if role == "organizer":
             return await start_broadcast(update, context)
         else:
@@ -160,17 +163,14 @@ async def events_list_handler(update, context):
 
     callback_data = query.data
 
-    # Обработка выбора конкретного мероприятия
     if callback_data.startswith('event_'):
         event_id = int(callback_data.split('_')[1])
-        events = get_today_events()
+        events = await sync_to_async(get_today_events)()
         event = next((e for e in events if e['id'] == event_id), None)
 
         if event:
-            # Получаем программу мероприятия
-            program = get_event_program(event_id)
+            program = await sync_to_async(get_event_program)(event_id)
 
-            # Формируем сообщение с программой
             message_text = format_event_program_message(event, program)
 
             await safe_edit_message(
@@ -181,9 +181,7 @@ async def events_list_handler(update, context):
             )
             return states_bot.EVENT_PROGRAM
 
-    # Обработка кнопки "Назад" в главное меню
     elif callback_data == 'back_to_main':
-        # Используем функцию из утилит
         message_text, reply_markup = await get_main_menu_message(
             query.from_user.id,
             query.from_user.first_name
@@ -196,9 +194,8 @@ async def events_list_handler(update, context):
         )
         return states_bot.MAIN_MENU
 
-    # Обработка кнопки "Назад" к списку мероприятий
     elif callback_data == 'back_to_events':
-        events = get_today_events()
+        events = await sync_to_async(get_today_events)()
 
         message_text = format_events_list_message(events)
 
@@ -223,20 +220,15 @@ async def next_events_list_handler(update, context):
     callback_data = query.data
     user_id = query.from_user.id
 
-    # Обработка выбора конкретного мероприятия
     if callback_data.startswith('event_'):
         event_id = int(callback_data.split('_')[1])
-        events = get_next_events()
+        events = await sync_to_async(get_next_events)()
         event = next((e for e in events if e['id'] == event_id), None)
 
         if event:
-            # Проверка подписки через сервис
             subscribed = await is_user_subscribed(user_id, event_id)
+            program = await sync_to_async(get_next_event_program)(event_id)
 
-            # Получаем программу мероприятия
-            program = get_next_event_program(event_id)
-
-            # Формируем сообщение с программой
             message_text = format_next_event_program_message(event, program)
 
             await safe_edit_message(
@@ -247,17 +239,14 @@ async def next_events_list_handler(update, context):
             )
             return states_bot.NEXT_EVENT_PROGRAM
 
-    # Обработка подписки
     elif callback_data.startswith("subscribe_"):
         event_id = int(callback_data.split("_")[1])
         user_id = query.from_user.id
 
-        # Получаем событие и форматируем сообщение
-        events = get_next_events()
+        events = await sync_to_async(get_next_events)()
         event = next((e for e in events if e["id"] == event_id), None)
 
         if event:
-
             success = await subscribe_to_event(user_id, event_id)
 
             if success:
@@ -273,7 +262,6 @@ async def next_events_list_handler(update, context):
                     f"Вам придет напоминание за день до начала мероприятия."
                 )
 
-                # Меняем клавиатуру на "Вы подписаны"
                 await query.edit_message_text(
                     text,
                     reply_markup=next_event_program_keyboard(event_id, subscribed=True),
@@ -287,9 +275,7 @@ async def next_events_list_handler(update, context):
 
         return states_bot.NEXT_EVENT_PROGRAM
 
-    # Обработка кнопки "Назад" в главное меню
     elif callback_data == 'back_to_main':
-        # Используем функцию из утилит
         message_text, reply_markup = await get_main_menu_message(
             query.from_user.id,
             query.from_user.first_name
@@ -302,9 +288,8 @@ async def next_events_list_handler(update, context):
         )
         return states_bot.MAIN_MENU
 
-    # Обработка кнопки "Назад" к списку мероприятий
     elif callback_data == 'back_to_events':
-        events = get_next_events()
+        events = await sync_to_async(get_next_events)()
 
         message_text = format_next_events_message(events)
 
@@ -329,10 +314,7 @@ def format_events_list_message(events):
     message = "*Мероприятия на сегодня:*\n\n"
 
     for event in events:
-        # Форматируем время
         time_str = f"{event['started_at'].strftime('%H:%M')} - {event['ended_at'].strftime('%H:%M')}"
-
-        # Добавляем статус "Идет сейчас"
         status = " 🟢 *ИДЕТ СЕЙЧАС*" if event['is_active'] else ""
 
         message += f"• *{event['name']}*\n"
@@ -347,14 +329,12 @@ def format_event_program_message(event, program):
     """
     Форматирует сообщение с программой мероприятия
     """
-    # Заголовок мероприятия
     date_str = event['event_date'].strftime('%d.%m.%y')
     time_str = f"{event['started_at'].strftime('%H:%M')} - {event['ended_at'].strftime('%H:%M')}"
 
     message = f"*{event['name']}*\n"
     message += f"{date_str} • {time_str}\n\n"
 
-    # Программа
     if program:
         message += "*Программа:*\n\n"
         for session in program:
@@ -384,11 +364,10 @@ def format_next_events_message(events):
     message = "*Предстоящие мероприятия:*\n\n"
 
     for event in events:
-        # Форматируем время
         time_str = f"{event['started_at'].strftime('%H:%M')} - {event['ended_at'].strftime('%H:%M')}"
 
         message += f"• *{event['name']}*\n"
-        message += f"{event['event_date']}  🕐 {time_str}\n\n"
+        message += f"{event['event_date'].strftime('%d.%m.%Y')}  🕐 {time_str}\n\n"
 
     message += "Выберите мероприятие, чтобы увидеть подробную программу, и подписаться.\n\n"
 
@@ -399,14 +378,12 @@ def format_next_event_program_message(event, program):
     """
     Форматирует сообщение с программой мероприятия
     """
-    # Заголовок мероприятия
     date_str = event['event_date'].strftime('%d.%m.%y')
     time_str = f"{event['started_at'].strftime('%H:%M')} - {event['ended_at'].strftime('%H:%M')}"
 
     message = f"*{event['name']}*\n"
     message += f"{date_str} • {time_str}\n\n"
 
-    # Программа
     if program:
         message += "*Программа:*\n\n"
         for session in program:

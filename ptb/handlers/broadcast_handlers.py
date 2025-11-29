@@ -1,8 +1,8 @@
 from telegram import Update, ReplyKeyboardRemove
-from telegram.ext import ContextTypes, MessageHandler, filters
+from telegram.ext import ContextTypes
 from . import states_bot
 from ptb.keyboards import keyboard
-from meetup_core.models.Models import User
+from meetup_core.models import User
 from asgiref.sync import sync_to_async
 from ptb.menu_utils import get_main_menu_message
 
