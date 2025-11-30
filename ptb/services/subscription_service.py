@@ -2,37 +2,26 @@ from typing import List, Dict
 from telegram import Bot
 from ptb.events_data import get_next_events
 
-# TODO: УДАЛИТЬ ВСЁ ЭТО ПРИ ПЕРЕХОДЕ НА БД - НАЧАЛО ЛОКАЛЬНОЙ ЗАГЛУШКИ
-_subscribed_users: set = set()  # Все пользователи с любой подпиской
+# TODO: УДАЛИТЬ ВСЁ ЭТО ПРИ ПЕРЕХОДЕ НА БД - НАЧАЛО  ЗАГЛУШКИ
+_subscribed_users: set = set()  # Все подписанные пользователи
+_known_events: set = set()  # Мероприятия, которые уже известны системе
 
 
-# TODO: УДАЛИТЬ ВСЁ ЭТО ПРИ ПЕРЕХОДЕ НА БД - КОНЕЦ ЛОКАЛЬНОЙ ЗАГЛУШКИ
+# TODO: УДАЛИТЬ ВСЁ ЭТО ПРИ ПЕРЕХОДЕ НА БД - КОНЕЦ  ЗАГЛУШКИ
 
 
 async def subscribe_to_all_events(user_id: int, bot=None) -> dict:
     """
-    ПОДПИСЫВАЕТ ПОЛЬЗОВАТЕЛЯ НА ВСЕ БУДУЩИЕ МЕРОПРИЯТИЯ
+    ПОДПИСЫВАЕТ ПОЛЬЗОВАТЕЛЯ НА УВЕДОМЛЕНИЯ О НОВЫХ МЕРОПРИЯТИЯХ
     """
     try:
-        events = get_next_events()
-
-        if not events:
-            return {
-                'success': False,
-                'message': "На данный момент нет доступных мероприятий для подписки."
-            }
-
-        # TODO: УДАЛИТЬ ПРИ ПЕРЕХОДЕ НА БД - НАЧАЛО ЛОКАЛЬНОЙ ЛОГИКИ
+        # TODO: УДАЛИТЬ ПРИ ПЕРЕХОДЕ НА БД - НАЧАЛО  ЛОГИКИ
         _subscribed_users.add(user_id)
-
-        if bot:
-            await send_events_notification(bot, user_id, events)
-        # TODO: УДАЛИТЬ ПРИ ПЕРЕХОДЕ НА БД - КОНЕЦ ЛОКАЛЬНОЙ ЛОГИКИ
+        # TODO: УДАЛИТЬ ПРИ ПЕРЕХОДЕ НА БД - КОНЕЦ  ЛОГИКИ
 
         return {
             'success': True,
-            'message': f"Вы подписались на {len(events)} будущих мероприятий!",
-            'subscribed_count': len(events)
+            'message': "Вы подписались на уведомления о новых мероприятиях!",
         }
 
     except Exception as e:
@@ -42,12 +31,51 @@ async def subscribe_to_all_events(user_id: int, bot=None) -> dict:
         }
 
 
-async def send_events_notification(bot, user_id: int, events: List[dict]):
-    """Отправляет уведомление о мероприятиях"""
+async def notify_about_new_events(bot: Bot):
+    """
+    ОСНОВНАЯ ФУНКЦИЯ ДЛЯ УВЕДОМЛЕНИЙ О НОВЫХ МЕРОПРИЯТИЯХ
+    Проверяет только НОВЫЕ мероприятия, добавленные после последней проверки
+    """
     try:
-        message = "*НОВЫЕ МЕРОПРИЯТИЯ!*\n\n"
+        # Получаем текущие мероприятия
+        current_events = get_next_events()
+        current_event_ids = {event['id'] for event in current_events}
 
-        for event in events:
+        # TODO: УДАЛИТЬ ПРИ ПЕРЕХОДЕ НА БД - Начало логики
+        # Находим новые мероприятия (которых не было в прошлой проверке)
+        new_event_ids = current_event_ids - _known_events
+
+        if not new_event_ids or not _subscribed_users:
+            # Обновляем список известных мероприятий
+            _known_events.update(current_event_ids)
+            return
+
+        # Получаем информацию о новых мероприятиях
+        new_events = [event for event in current_events if
+                      event['id'] in new_event_ids]
+
+        # Уведомляем всех подписчиков о новых мероприятиях
+        for user_id in _subscribed_users:
+            try:
+                await send_new_events_notification(bot, user_id, new_events)
+            except Exception:
+                pass
+
+        # Обновляем список известных мероприятий
+        _known_events.update(current_event_ids)
+        # TODO: УДАЛИТЬ ПРИ ПЕРЕХОДЕ НА БД - Конец логики
+
+    except Exception:
+        pass
+
+
+async def send_new_events_notification(bot, user_id: int,
+                                       new_events: List[dict]):
+    """Отправляет уведомление о НОВЫХ мероприятиях"""
+    try:
+        message = "*НОВОЕ МЕРОПРИЯТИЕ!*\n\n"
+
+        for event in new_events:
             time_str = f"{event['started_at'].strftime('%H:%M')} - {event['ended_at'].strftime('%H:%M')}"
             message += f"• *{event['name']}*\n"
             message += f"  {event['event_date']} {time_str}\n"
@@ -63,34 +91,8 @@ async def send_events_notification(bot, user_id: int, events: List[dict]):
         pass
 
 
-async def notify_about_new_events(bot: Bot):
-    """
-    ОСНОВНАЯ ФУНКЦИЯ ДЛЯ УВЕДОМЛЕНИЙ О НОВЫХ МЕРОПРИЯТИЯХ
-    Вызывается из reminder_service.py
-    """
-    try:
-        events = get_next_events()
-
-        if not events:
-            return
-
-        # TODO: УДАЛИТЬ ПРИ ПЕРЕХОДЕ НА БД
-        if not _subscribed_users:
-            return
-
-        for user_id in _subscribed_users:
-            try:
-                await send_events_notification(bot, user_id, events)
-            except Exception:
-                pass
-
-    except Exception:
-        pass
-
-
 # TODO: УДАЛИТЬ ЭТУ ФУНКЦИЮ ПРИ ПЕРЕХОДЕ НА БД
 async def is_user_subscribed(user_id: int, event_id: int) -> bool:
-    """Проверяет подписку (временная функция для совместимости)"""
     return False
 
 
@@ -100,64 +102,62 @@ async def is_user_subscribed(user_id: int, event_id: int) -> bool:
 
 from asgiref.sync import sync_to_async
 from meetup_core.models.Models import User, Event, EventSubscription
-from datetime import datetime
+from datetime import datetime, timedelta
 
 @sync_to_async
 def subscribe_to_all_events_db(user_id: int, bot=None) -> dict:
     try:
         user, created = User.objects.get_or_create(tg_id=user_id)
-        future_events = Event.objects.filter(event_date__gte=datetime.now().date())
 
-        if not future_events.exists():
-            return {'success': False, 'message': "Нет доступных мероприятий"}
-
-        for event in future_events:
-            EventSubscription.objects.get_or_create(user=user, event=event)
-
-        if bot:
-            events_list = list(future_events)
-            await send_events_notification_db(bot, user_id, events_list)
+        # Просто создаем запись о подписке пользователя
+        subscription, created = EventSubscription.objects.get_or_create(
+            user=user,
+            defaults={'subscribed_at': datetime.now()}
+        )
 
         return {
             'success': True, 
-            'message': f"Вы подписались на {future_events.count()} будущих мероприятий!",
-            'subscribed_count': future_events.count()
+            'message': "Вы подписались на уведомления о новых мероприятиях!",
         }
 
     except Exception as e:
         return {'success': False, 'message': "Ошибка при подписке"}
 
-async def send_events_notification_db(bot, user_id: int, events: List):
+@sync_to_async 
+def notify_about_new_events_db(bot: Bot):
     try:
-        message = "*НОВЫЕ МЕРОПРИЯТИЯ!*\n\n"
+        # Получаем всех подписанных пользователей
+        subscribed_users = User.objects.filter(eventsubscription__isnull=False).distinct()
 
-        for event in events:
+        # Получаем мероприятия, созданные после последней проверки
+        # В реальной системе нужно хранить время последней проверки
+        new_events = Event.objects.filter(created_at__gte=datetime.now() - timedelta(hours=24))
+
+        if not new_events.exists() or not subscribed_users.exists():
+            return
+
+        events_list = list(new_events)
+
+        for user in subscribed_users:
+            try:
+                await send_new_events_notification_db(bot, user.tg_id, events_list)
+            except Exception:
+                pass
+
+    except Exception:
+        pass
+
+async def send_new_events_notification_db(bot, user_id: int, new_events: List):
+    try:
+        message = "*НОВОЕ МЕРОПРИЯТИЕ!*\n\n"
+
+        for event in new_events:
             time_str = f"{event.started_at.strftime('%H:%M')} - {event.ended_at.strftime('%H:%M')}"
             message += f"• *{event.name}*\n"
             message += f"  {event.event_date} {time_str}\n"
             message += f"  {event.organizer}\n\n"
 
         await bot.send_message(chat_id=user_id, text=message, parse_mode='Markdown')
-
-    except Exception:
-        pass
-
-@sync_to_async 
-def notify_about_new_events_db(bot: Bot):
-    try:
-        subscribed_users = User.objects.filter(eventsubscription__isnull=False).distinct()
-        future_events = Event.objects.filter(event_date__gte=datetime.now().date())
-
-        if not future_events.exists() or not subscribed_users.exists():
-            return
-
-        events_list = list(future_events)
-
-        for user in subscribed_users:
-            try:
-                await send_events_notification_db(bot, user.tg_id, events_list)
-            except Exception:
-                pass
 
     except Exception:
         pass

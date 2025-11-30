@@ -5,7 +5,7 @@ import asyncio
 
 def setup_bot_handlers(application: Application):
     """Настройка всех обработчиков бота"""
-    application.add_handler(conversation_handler)
+    pass
 
 
 def start_background_services(application: Application):
