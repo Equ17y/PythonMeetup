@@ -12,6 +12,9 @@ def guest_keyboard():
         ],
         [
             InlineKeyboardButton('Предстоящие мероприятия', callback_data='upcoming')
+        ],
+        [
+            InlineKeyboardButton('Подписка', callback_data='quick_subscribe')
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -30,6 +33,9 @@ def speaker_keyboard():
         ],
         [
             InlineKeyboardButton('Предстоящие мероприятия', callback_data='upcoming')
+        ],
+        [
+            InlineKeyboardButton('Подписка', callback_data='quick_subscribe')
         ]
     ]
     return InlineKeyboardMarkup(keyboard)

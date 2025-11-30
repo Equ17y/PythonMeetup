@@ -23,17 +23,9 @@ def next_event_program_keyboard(event_id, subscribed=False):
     """
     Клавиатура для программы мероприятия
     """
-    if subscribed:
-        subscribe_btn = InlineKeyboardButton("✓ Вы подписаны", callback_data="noop")
-    else:
-        subscribe_btn = InlineKeyboardButton("Подписаться", callback_data=f"subscribe_{event_id}")
-    
     keyboard = [
         [
             InlineKeyboardButton("🔙 Назад к мероприятиям", callback_data="back_to_events")
         ],
-        [
-            subscribe_btn
-        ]
     ]
     return InlineKeyboardMarkup(keyboard)

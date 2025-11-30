@@ -7,7 +7,7 @@ from ptb.events_data import get_today_events, get_event_program, finish_current_
 from ptb.roles import get_user_role
 from .broadcast_handlers import start_broadcast, receive_broadcast_text, confirm_broadcast
 from ptb.menu_utils import get_main_menu_message
-from ptb.services.subscription_service import subscribe_to_event, is_user_subscribed
+from ptb.services.subscription_service import subscribe_to_all_events, is_user_subscribed
 
 async def safe_edit_message(query, new_text, reply_markup=None, parse_mode=None):
     """
@@ -54,9 +54,9 @@ async def main_menu_handler(update, context):
     await query.answer()
 
     callback_data = query.data
-
     user = query.from_user
     role = get_user_role(user.id)
+
     
     # Обработка программы мероприятий
     if callback_data == 'program':
@@ -72,13 +72,27 @@ async def main_menu_handler(update, context):
             parse_mode='Markdown'
         )
         return states_bot.EVENTS_LIST
-    
+
     # Обработка предстоящих мероприятий для всех ролей
+    elif callback_data == 'quick_subscribe':
+        user_id = query.from_user.id
+
+        from ptb.services.subscription_service import subscribe_to_all_events
+        result = await subscribe_to_all_events(user_id, context.bot)
+
+        await safe_edit_message(
+            query,
+            result['message'],
+            reply_markup=get_role_keyboard(role),
+            parse_mode='Markdown'
+        )
+        return states_bot.MAIN_MENU
+
     elif callback_data == 'upcoming':
         next_events = get_next_events()
-        
+
         message_text = format_next_events_message(next_events)
-        
+
         await safe_edit_message(
             query,
             message_text,
@@ -86,7 +100,7 @@ async def main_menu_handler(update, context):
             parse_mode='Markdown'
         )
         return states_bot.NEXT_EVENTS_LIST
-        
+
     # Обработчики для спикера
     elif callback_data == 'finish_speech':
         if role == "speaker":
@@ -240,52 +254,12 @@ async def next_events_list_handler(update, context):
             await safe_edit_message(
                 query,
                 message_text,
-                reply_markup=next_event_program_keyboard(event_id, subscribed=subscribed),
+                reply_markup=next_event_program_keyboard(event_id),
                 parse_mode='Markdown'
             )
             return states_bot.NEXT_EVENT_PROGRAM
     
-    # Обработка подписки   
-    elif callback_data.startswith("subscribe_"):
-        event_id = int(callback_data.split("_")[1])
-        user_id = query.from_user.id
 
-        # Получаем событие и форматируем сообщение
-        events = get_next_events()
-        event = next((e for e in events if e["id"] == event_id), None)
-
-        if event:
-            # TODO: ЗАМЕНИТЬ на subscribe_to_event_db при переходе на БД
-            success = await subscribe_to_event(user_id, event_id)
-
-            if success:
-
-                event_name = event["name"]
-                event_date = event["event_date"].strftime("%d.%m.%Y")
-                event_time = f"{event['started_at'].strftime('%H:%M')} – {event['ended_at'].strftime('%H:%M')}"
-
-                text = (
-                    f"*Вы подписались на мероприятие!*\n\n"
-                    f"*{event_name}*\n"
-                    f"{event_date}\n"
-                    f"{event_time}\n\n"
-                    f"Вам придет напоминание за день до начала мероприятия."
-                )
-
-                # Меняем клавиатуру на "Вы подписаны"
-                await query.edit_message_text(
-                    text,
-                    reply_markup=next_event_program_keyboard(event_id, subscribed=True),
-                    parse_mode="Markdown"
-                )
-
-            else:
-                await query.answer("Вы уже подписаны на это мероприятие!",show_alert=True)
-        else:
-            await query.answer("Ошибка: мероприятие не найдено.", show_alert=True)
-
-        return states_bot.NEXT_EVENT_PROGRAM
-        
     # Обработка кнопки "Назад" в главное меню
     elif callback_data == 'back_to_main':
         # Используем функцию из утилит
