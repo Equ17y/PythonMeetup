@@ -9,6 +9,10 @@ class User(models.Model):
     ]
 
     tg_id = models.IntegerField('ID ТГ')
+    username = models.CharField(
+        'Username', max_length=255,
+        blank=True, null=True
+    )
     name = models.CharField('Имя', max_length=255, blank=True, null=True)
     is_active = models.BooleanField('Выступает', default=False)
     user_role = models.CharField(

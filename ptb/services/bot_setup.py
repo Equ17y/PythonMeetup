@@ -3,6 +3,7 @@ from ptb.handlers.conversation_handlers import conversation_handler
 from .reminder_service import start_reminder_service
 import asyncio
 
+
 def setup_bot_handlers(application: Application):
     """Настройка всех обработчиков бота"""
     pass

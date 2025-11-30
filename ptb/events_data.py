@@ -1,5 +1,6 @@
-from datetime import datetime, time, timedelta, date
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+from meetup_core.models import Event, SpeakerTopic
 
 # Часовой пояс Москвы
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
@@ -11,17 +12,6 @@ _FINISHED_SESSIONS: set[tuple[int, int]] = set()
 def now_moscow() -> datetime:
     """Возвращает текущее московское время."""
     return datetime.now(MOSCOW_TZ)
-
-
-def is_active_now(event_date, start_time) -> bool:
-    """
-    Проверяет, наступило ли время начала (по Москве).
-    Для доклада мы НЕ ограничиваемся временем конца — доклад
-    может идти дольше расписания.
-    """
-    start_dt = datetime.combine(event_date, start_time, tzinfo=MOSCOW_TZ)
-    current = now_moscow()
-    return current >= start_dt
 
 
 def mark_session_finished(event_id: int, session_index: int) -> None:
@@ -50,114 +40,23 @@ def get_today_events():
     """
     today = now_moscow().date()
 
-    events = [
-        {
-            "id": 1,
-            "name": "Тема мероприятия #1",
-            "event_date": today,
-            "started_at": time(0, 0),
-            "ended_at": time(13, 0),
-        },
-        {
-            "id": 2,
-            "name": "Тема мероприятия #2",
-            "event_date": today,
-            "started_at": time(13, 0),
-            "ended_at": time(16, 0),
-        },
-        {
-            "id": 3,
-            "name": "Тема мероприятия #3",
-            "event_date": today,
-            "started_at": time(16, 0),
-            "ended_at": time(23, 59),
-        },
-    ]
+    events_db = Event.objects.filter(event_date=today)
 
-    # Определяем активность мероприятия по активному докладу
+    events = []
+    for event in events_db:
+        events.append({
+            "id": event.id,
+            "name": event.name,
+            "event_date": event.event_date,
+            "started_at": event.started_at,
+            "ended_at": event.ended_at,
+        })
+
     for event in events:
         program = get_event_program(event["id"])
         event["is_active"] = any(s.get("is_active") for s in program)
 
     return events
-
-
-def _get_program_template():
-    """
-    Базовые данные программы мероприятия (без статусов).
-    В реальном приложении это будет из БД.
-    """
-    return {
-        1: [
-            {
-                "started_at": time(0, 0),
-                "ended_at": time(11, 0),
-                "topic": "Тема доклада #1",
-                "speaker": "Иван Петров",
-                "speaker_username": "@ivan_zhuk0v",
-            },
-            {
-                "started_at": time(11, 0),
-                "ended_at": time(12, 0),
-                "topic": "Тема доклада #2",
-                "speaker": "Иван Петров",
-                "speaker_username": "@ivan_zhuk0v",
-            },
-            {
-                "started_at": time(12, 0),
-                "ended_at": time(13, 0),
-                "topic": "Тема доклада #3",
-                "speaker": "Иван Петров",
-                "speaker_username": "@ivan_zhuk0v",
-            },
-        ],
-        2: [
-            {
-                "started_at": time(13, 0),
-                "ended_at": time(14, 0),
-                "topic": "Тема доклада #1",
-                "speaker": "Иван Петров",
-                "speaker_username": "@ivan_zhuk0v",
-            },
-            {
-                "started_at": time(14, 0),
-                "ended_at": time(15, 0),
-                "topic": "Тема доклада #2",
-                "speaker": "Иван Петров",
-                "speaker_username": "@ivan_zhuk0v",
-            },
-            {
-                "started_at": time(15, 0),
-                "ended_at": time(16, 0),
-                "topic": "Тема доклада #3",
-                "speaker": "Иван Петров",
-                "speaker_username": "@ivan_zhuk0v",
-            },
-        ],
-        3: [
-            {
-                "started_at": time(16, 0),
-                "ended_at": time(17, 0),
-                "topic": "Тема доклада #1",
-                "speaker": "Иван Петров",
-                "speaker_username": "@ivan_zhuk0v",
-            },
-            {
-                "started_at": time(17, 0),
-                "ended_at": time(18, 0),
-                "topic": "Тема доклада #2",
-                "speaker": "Иван Петров",
-                "speaker_username": "@Nyuta12",
-            },
-            {
-                "started_at": time(18, 0),
-                "ended_at": time(23, 59),
-                "topic": "Тема доклада #3",
-                "speaker": "Иван Петров",
-                "speaker_username": "@Nyuta12",
-            },
-        ],
-    }
 
 
 def get_event_program(event_id):
@@ -167,34 +66,41 @@ def get_event_program(event_id):
     - is_active: доклад, который «идёт сейчас»
       (учитывается московское время и завершённость предыдущего доклада)
     """
-    now_dt = datetime.now(MOSCOW_TZ)
+    now_dt = now_moscow()
     today = now_dt.date()
-    
-    today = now_moscow().date()
-    base_programs = _get_program_template()
 
-    # Копируем, чтобы не портить шаблон
-    raw_program = base_programs.get(event_id, [])
-    program = [dict(item) for item in raw_program]
+    sessions_db = SpeakerTopic.objects.filter(event_id=event_id).select_related('speaker').order_by('started_at')
 
+    program = []
+    for session in sessions_db:
+        speaker_name = session.speaker.name if session.speaker.name else f"Пользователь {session.speaker.tg_id}"
+        speaker_username = session.speaker.username if session.speaker.username else f"user_{session.speaker.tg_id}"
+
+        program.append({
+            "started_at": session.started_at.strftime('%H:%M'),
+            "ended_at": session.ended_at.strftime('%H:%M'),
+            "topic": session.topic,
+            "speaker": speaker_name,
+            "speaker_username": f"@{speaker_username}",
+            "speaker_tg_id": session.speaker.tg_id,
+        })
     # Сначала проставим is_finished
     for idx, item in enumerate(program):
         # Пометка завершён ли вручную
         finished_manually = is_session_finished(event_id, idx)
 
+        session_obj = sessions_db[idx]
+
         # Автоматическое завершение через 30 минут после окончания
-        event_end_dt = datetime.combine(today, item["ended_at"], tzinfo=MOSCOW_TZ)
+        event_end_dt = datetime.combine(today, session_obj.ended_at, tzinfo=MOSCOW_TZ)
         auto_finish_dt = event_end_dt + timedelta(minutes=30)
 
         finished_auto = now_dt >= auto_finish_dt
-
         # Финальный статус завершения
         finished = finished_manually or finished_auto
 
         item["is_finished"] = finished
 
-    # Теперь определяем, какой доклад активен
-    now_dt = now_moscow()
     previous_all_finished = True
     active_assigned = False
 
@@ -215,10 +121,9 @@ def get_event_program(event_id):
         if item["is_finished"]:
             continue
 
-        # проверяем, началось ли время доклада по расписанию
-        start_dt = datetime.combine(today, item["started_at"], tzinfo=MOSCOW_TZ)
+        session_obj = sessions_db[idx]
+        start_dt = datetime.combine(today, session_obj.started_at, tzinfo=MOSCOW_TZ)
         if now_dt >= start_dt:
-            # это первый НЕ завершённый доклад, время которого уже наступило
             item["is_active"] = True
             active_assigned = True
 
@@ -251,8 +156,8 @@ def finish_current_talk_for_speaker(speaker_username: str):
         program = get_event_program(event_id)
 
         for idx, session in enumerate(program):
-            prog_username = (session.get("speaker_username") or "").lstrip("@").lower()
-
+            # Сравниваем по username (без @)
+            prog_username = session['speaker_username'].lstrip("@").lower()
             # должен совпасть username И доклад должен быть активным
             if prog_username == username_norm and session.get("is_active"):
                 # помечаем доклад завершённым
@@ -270,118 +175,42 @@ def get_next_events():
     """
     Возвращает список следующих мероприятий
     """
-    events = [
-        {
-            'id': 1,
-            'name': 'Тема мероприятия #1',
-            'event_date': date(2025, 12, 10),
-            'started_at': time(10, 0),
-            'ended_at': time(13, 0),
-            'is_active': False,
-        },
-        {
-            'id': 2,
-            'name': 'Тема мероприятия #2',
-            'event_date': date(2025, 12, 11),
-            'started_at': time(13, 0),
-            'ended_at': time(16, 0),
-            'is_active': True,
-        },
-        {
-            'id': 1,
-            'name': 'Тема мероприятия #3',
-            'event_date': date(2025, 12, 15),
-            'started_at': time(16, 0),
-            'ended_at': time(19, 0),
-            'is_active': False,
-        }
-    ]
-    
+    today = now_moscow().date()
+
+    events_db = Event.objects.filter(event_date__gt=today).order_by('event_date')
+
+    events = []
+    for event in events_db:
+        events.append({
+            'id': event.id,
+            'name': event.name,
+            'event_date': event.event_date,
+            'started_at': event.started_at,
+            'ended_at': event.ended_at,
+            'is_active': event.is_active,
+        })
+
     return events
+
 
 def get_next_event_program(event_id):
     """
     Возвращает программу конкретного мероприятия (следующего)
     """
-    programs = {
-        1: [
-            {
-                'started_at': time(10, 0),
-                'ended_at': time(11, 0),
-                'topic': 'Тема доклада #1',
-                'speaker': 'Иван Петров',
-                'speaker_username': '@Nyuta12',
-                'is_active': False
-            },
-            {
-                'started_at': time(11, 0),
-                'ended_at': time(12, 0),
-                'topic': 'Тема доклада #2',
-                'speaker': 'Иван Петров',
-                'speaker_username': '@Nyuta12',
-                'is_active': False
-            },
-            {
-                'started_at': time(12, 0),
-                'ended_at': time(13, 0),
-                'topic': 'Тема доклада #3',
-                'speaker': 'Иван Петров',
-                'speaker_username': '@Nyuta12',
-                'is_active': False
-            }
-        ],
-        2: [
-            {
-                'started_at': time(13, 0),
-                'ended_at': time(14, 0),
-                'topic': 'Тема доклада #1',
-                'speaker': 'Иван Петров',
-                'speaker_username': '@Nyuta12',
-                'is_active': False
-            },
-            {
-                'started_at': time(14, 0),
-                'ended_at': time(15, 0),
-                'topic': 'Тема доклада #2',
-                'speaker': 'Иван Петров',
-                'speaker_username': '@Nyuta12',
-                'is_active': False
-            },
-            {
-                'started_at': time(15, 0),
-                'ended_at': time(16, 0),
-                'topic': 'Тема доклада #3',
-                'speaker': 'Иван Петров',
-                'speaker_username': '@Nyuta12',
-                'is_active': False
-            }
-        ],
-        3: [
-            {
-                'started_at': time(16, 0),
-                'ended_at': time(17, 0),
-                'topic': 'Тема доклада #1',
-                'speaker': 'Иван Петров',
-                'speaker_username': '@Nyuta12',
-                'is_active': False
-            },
-            {
-                'started_at': time(17, 0),
-                'ended_at': time(18, 0),
-                'topic': 'Тема доклада #2',
-                'speaker': 'Иван Петров',
-                'speaker_username': '@Nyuta12',
-                'is_active': False
-            },
-            {
-                'started_at': time(18, 0),
-                'ended_at': time(19, 0),
-                'topic': 'Тема доклада #3',
-                'speaker': 'Иван Петров',
-                'speaker_username': '@Nyuta12',
-                'is_active': False
-            }
-        ]
-    }
-    
-    return programs.get(event_id, [])
+    sessions_db = SpeakerTopic.objects.filter(event_id=event_id).select_related('speaker').order_by('started_at')
+
+    program = []
+    for session in sessions_db:
+        speaker_name = session.speaker.name if session.speaker.name else f"Пользователь {session.speaker.tg_id}"
+        speaker_username = session.speaker.username if session.speaker.username else f"user_{session.speaker.tg_id}"
+
+        program.append({
+            'started_at': session.started_at.strftime('%H:%M'),
+            'ended_at': session.ended_at.strftime('%H:%M'),
+            'topic': session.topic,
+            'speaker': speaker_name,
+            'speaker_username': f"@{speaker_username}",
+            'is_active': False
+        })
+
+    return program

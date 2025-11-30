@@ -1,5 +1,5 @@
 # Контроль состояний
-from telegram.ext import(
+from telegram.ext import (
     CommandHandler,
     CallbackQueryHandler,
     ConversationHandler,
@@ -7,7 +7,10 @@ from telegram.ext import(
     filters
 )
 from . import cmd_handlers, states_bot
-from .callback_handlers import main_menu_handler, events_list_handler, next_events_list_handler
+from .callback_handlers import (
+    main_menu_handler, events_list_handler,
+    next_events_list_handler
+)
 from .broadcast_handlers import receive_broadcast_text, confirm_broadcast
 
 conversation_handler = ConversationHandler(
