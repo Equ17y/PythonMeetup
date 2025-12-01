@@ -10,7 +10,7 @@ class User(models.Model):
 
     tg_id = models.IntegerField('ID ТГ')
     username = models.CharField(
-        'Username', max_length=255,
+        'Имя пользователя', max_length=255,
         blank=True, null=True
     )
     name = models.CharField('Имя', max_length=255, blank=True, null=True)

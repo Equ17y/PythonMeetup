@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from zoneinfo import ZoneInfo
 from meetup_core.models import Event, SpeakerTopic
 
@@ -14,7 +14,7 @@ def now_moscow() -> datetime:
 def get_today_events():
     """
     Возвращает список сегодняшних мероприятий с полем is_active,
-    которое определяется по программе докладов на лету.
+    которое определяется по программе докладов.
     """
     today = now_moscow().date()
     events_db = Event.objects.filter(event_date=today)
@@ -30,7 +30,7 @@ def get_today_events():
             "event_date": event.event_date,
             "started_at": event.started_at,
             "ended_at": event.ended_at,
-            "is_active": event_is_active,  # Рассчитываем на лету
+            "is_active": event_is_active,
         })
 
     return events

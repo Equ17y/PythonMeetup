@@ -7,6 +7,7 @@ from .models import User, Event, SpeakerTopic, EventSubscription
 class UserAdmin(admin.ModelAdmin):
     list_display = ('tg_id', 'name', 'user_role',)
     list_filter = ('user_role',)
+    list_editable = ('user_role',)
     search_fields = ('name', 'tg_id')
 
 

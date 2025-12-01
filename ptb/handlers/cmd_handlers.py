@@ -1,7 +1,6 @@
 # Обработчик команд вида /команда
 from ptb.menu_utils import get_main_menu_message
 from . import states_bot
-from asgiref.sync import sync_to_async
 
 
 async def start(update, context):
