@@ -15,7 +15,7 @@ from ptb.events_data import (
 from ptb.roles import get_user_role
 from .broadcast_handlers import start_broadcast
 from ptb.menu_utils import get_main_menu_message
-from ptb.services.subscription_service import subscribe_to_all_events, is_user_subscribed
+from ptb.services.subscription_service import subscribe_to_all_events
 from asgiref.sync import sync_to_async
 
 
@@ -197,7 +197,6 @@ async def next_events_list_handler(update, context):
         event = next((e for e in events if e['id'] == event_id), None)
 
         if event:
-            subscribed = await is_user_subscribed(user_id, event_id)
             program = await sync_to_async(get_next_event_program)(event_id)
 
             message_text = format_next_event_program_message(event, program)
@@ -209,42 +208,6 @@ async def next_events_list_handler(update, context):
                 parse_mode='Markdown'
             )
             return states_bot.NEXT_EVENT_PROGRAM
-
-    elif callback_data.startswith("subscribe_"):
-        event_id = int(callback_data.split("_")[1])
-        user_id = query.from_user.id
-
-        events = await sync_to_async(get_next_events)()
-        event = next((e for e in events if e["id"] == event_id), None)
-
-        if event:
-            success = await subscribe_to_event(user_id, event_id)
-
-            if success:
-                event_name = event["name"]
-                event_date = event["event_date"].strftime("%d.%m.%Y")
-                event_time = f"{event['started_at'].strftime('%H:%M')} – {event['ended_at'].strftime('%H:%M')}"
-
-                text = (
-                    f"🎉 *Вы подписались на мероприятие!*\n\n"
-                    f"*{event_name}*\n"
-                    f"📅 {event_date}\n"
-                    f"⏰ {event_time}\n\n"
-                    f"Вам придет напоминание за день до начала мероприятия."
-                )
-
-                await query.edit_message_text(
-                    text,
-                    reply_markup=next_event_program_keyboard(event_id, subscribed=True),
-                    parse_mode="Markdown"
-                )
-
-            else:
-                await query.answer("Вы уже подписаны на это мероприятие!",show_alert=True)
-        else:
-            await query.answer("Ошибка: мероприятие не найдено.", show_alert=True)
-
-        return states_bot.NEXT_EVENT_PROGRAM
 
     elif callback_data == 'back_to_main':
         message_text, reply_markup = await get_main_menu_message(

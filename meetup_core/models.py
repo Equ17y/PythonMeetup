@@ -79,6 +79,10 @@ class EventSubscription(models.Model):
         on_delete=models.CASCADE,
         verbose_name='Мероприятие'
     )
+    subscribed_at = models.DateTimeField(
+        'Дата подписки',
+        auto_now_add=True
+    )
 
     class Meta:
         verbose_name = 'Подписка на мероприятие'
