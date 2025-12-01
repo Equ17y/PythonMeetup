@@ -14,7 +14,6 @@ class User(models.Model):
         blank=True, null=True
     )
     name = models.CharField('Имя', max_length=255, blank=True, null=True)
-    is_active = models.BooleanField('Выступает', default=False)
     user_role = models.CharField(
         'Роль пользователя',
         max_length=255,
@@ -35,7 +34,6 @@ class Event(models.Model):
     event_date = models.DateField('День мероприятия')
     started_at = models.TimeField('Время начала мероприятия')
     ended_at = models.TimeField('Время окончания мероприятия')
-    is_active = models.BooleanField('Активно', default=False)
 
     class Meta:
         verbose_name = 'Мероприятие'

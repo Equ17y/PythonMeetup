@@ -10,10 +10,10 @@ from ptb.keyboards.next_events_keyboard import (
 )
 from ptb.events_data import (
     get_today_events, get_event_program,
-    finish_current_talk_for_speaker, get_next_events, get_next_event_program
+    get_next_events, get_next_event_program,
 )
 from ptb.roles import get_user_role
-from .broadcast_handlers import start_broadcast, receive_broadcast_text, confirm_broadcast
+from .broadcast_handlers import start_broadcast
 from ptb.menu_utils import get_main_menu_message
 from ptb.services.subscription_service import subscribe_to_all_events, is_user_subscribed
 from asgiref.sync import sync_to_async
@@ -21,9 +21,7 @@ from asgiref.sync import sync_to_async
 
 async def safe_edit_message(query, new_text, reply_markup=None, parse_mode=None):
     """
-    Безопасная замена текста сообщения:
-    - обновляет только если текст реально изменился
-    - предотвращает ошибку "Message is not modified"
+    Безопасная замена текста сообщения
     """
     current_text = query.message.text_html or query.message.text
 
@@ -68,8 +66,6 @@ async def main_menu_handler(update, context):
 
     if callback_data == 'program':
         events = await sync_to_async(get_today_events)()
-
-
         message_text = format_events_list_message(events)
 
         await safe_edit_message(
@@ -80,12 +76,8 @@ async def main_menu_handler(update, context):
         )
         return states_bot.EVENTS_LIST
 
-
-    # Обработка предстоящих мероприятий для всех ролей
     elif callback_data == 'quick_subscribe':
         user_id = query.from_user.id
-
-        from ptb.services.subscription_service import subscribe_to_all_events
         result = await subscribe_to_all_events(user_id, context.bot)
 
         await safe_edit_message(
@@ -108,43 +100,6 @@ async def main_menu_handler(update, context):
             parse_mode='Markdown'
         )
         return states_bot.NEXT_EVENTS_LIST
-
-    # Обработчики для спикера
-    elif callback_data == 'finish_speech':
-        if role == "speaker":
-            user = query.from_user
-            username = user.username
-
-            if not username:
-                await query.answer(
-                    "У вашего Telegram-профиля не задан username",
-                    show_alert=True
-                )
-                return states_bot.MAIN_MENU
-
-            event, session = await sync_to_async(finish_current_talk_for_speaker)(username)
-
-            if event and session:
-                text = (
-                    f"Вы завершили свое выступление!\n\n"
-                    f"Мероприятие: *{event['name']}*\n"
-                    f"Доклад: *{session['topic']}*\n\n"
-                    f"Спасибо за участие!"
-                )
-                await safe_edit_message(
-                    query,
-                    text,
-                    reply_markup=keyboard.speaker_keyboard(),
-                    parse_mode='Markdown'
-                )
-            else:
-                await query.answer(
-                    "Сейчас нет активного доклада, привязанного к вашему аккаунту.\n"
-                    "Возможно, ваш доклад ещё не начался или уже завершён.",
-                    show_alert=True
-                )
-        else:
-            await query.answer("Эта функция доступна только спикерам!", show_alert=True)
 
     elif callback_data == 'event_programs':
         if role == "organizer":
@@ -255,7 +210,6 @@ async def next_events_list_handler(update, context):
             )
             return states_bot.NEXT_EVENT_PROGRAM
 
-
     elif callback_data.startswith("subscribe_"):
         event_id = int(callback_data.split("_")[1])
         user_id = query.from_user.id
@@ -356,13 +310,15 @@ def format_event_program_message(event, program):
         message += "*Программа:*\n\n"
         for session in program:
             status = " 🟢 *ИДЕТ СЕЙЧАС*" if session['is_active'] else ""
-            clean_username = session['speaker_username'].lstrip("@")
+            finished = " ✓" if session['is_finished'] else ""
+
             speaker_link = (
-                    f"[{session['speaker']}](https://t.me/{session['speaker_username'][1:]})"
-                    if session['speaker_username']
-                    else session['speaker']
-                )
-            message += f"{session['topic']}\n"
+                f"[{session['speaker']}](https://t.me/{session['speaker_username'][1:]})"
+                if session['speaker_username']
+                else session['speaker']
+            )
+
+            message += f"{session['topic']}{finished}\n"
             message += f"{session['started_at']} - {session['ended_at']} {status}\n"
             message += f"Докладчик: {speaker_link}\n\n"
     else:

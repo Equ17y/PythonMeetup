@@ -5,14 +5,14 @@ from .models import User, Event, SpeakerTopic, EventSubscription
 
 
 class UserAdmin(admin.ModelAdmin):
-    list_display = ('tg_id', 'name', 'user_role', 'is_active')
-    list_filter = ('user_role', 'is_active')
+    list_display = ('tg_id', 'name', 'user_role',)
+    list_filter = ('user_role',)
     search_fields = ('name', 'tg_id')
 
 
 class EventAdmin(admin.ModelAdmin):
-    list_display = ('name', 'event_date', 'started_at', 'ended_at', 'is_active')
-    list_filter = ('event_date', 'is_active')
+    list_display = ('name', 'event_date', 'started_at', 'ended_at',)
+    list_filter = ('event_date',)
     search_fields = ('name',)
 
 

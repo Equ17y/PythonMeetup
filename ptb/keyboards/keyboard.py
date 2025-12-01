@@ -26,9 +26,6 @@ def speaker_keyboard():
     """
     keyboard = [
         [
-            InlineKeyboardButton('Завершить свое выступление', callback_data='finish_speech'),
-        ],
-        [
             InlineKeyboardButton('Программы мероприятий', callback_data='program'),
         ],
         [
